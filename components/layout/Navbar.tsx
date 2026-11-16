@@ -5,6 +5,8 @@ import {
   LayoutDashboard,
   Plus,
   ArrowLeft,
+  Coins,
+  ShieldCheck,
 } from "lucide-react";
 
 import Link from "next/link";
@@ -56,6 +58,24 @@ export function Navbar() {
           <nav className="flex items-center gap-2">
             {user ? (
               <>
+                {user.is_admin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/admin")}
+                    className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5"
+                  >
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <span>Admin</span>
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/60 border border-border text-xs font-medium text-foreground">
+                  <Coins className="h-3.5 w-3.5 text-amber-500" />
+                  <span>{user.credits ?? 0}</span>
+                  <span className="text-muted-foreground hidden sm:inline">credits</span>
+                </div>
+
                 <Button
                   variant="ghost"
                   size="sm"

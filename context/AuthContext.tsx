@@ -18,6 +18,7 @@ type AuthContextType = {
   login: (token: string, user: any) => void;
   logout: () => void;
   refreshAuth: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -41,8 +42,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (token && storedUser) {
       setUser(storedUser);
+      // Fetch latest user data (credits, etc.) in background
+      refreshUser();
     } else {
       setUser(null);
+    }
+  };
+
+  const refreshUser = async () => {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/user`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        localStorage.setItem("user", JSON.stringify(data));
+      }
+    } catch (e) {
+      console.error("Failed to refresh user:", e);
     }
   };
 
@@ -77,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         refreshAuth,
+        refreshUser,
       }}
     >
       {children}

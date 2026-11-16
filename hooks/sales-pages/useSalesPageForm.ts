@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 import { buildGenerated } from "@/lib/mock-data";
+import { useAuth } from "@/context/AuthContext";
 import {
   useCreateSalesPage,
   useUpdateSalesPage,
@@ -24,6 +25,7 @@ type FormState = {
 
 export const useSalesPageForm = (editId?: string) => {
   const router = useRouter();
+  const { user, refreshUser } = useAuth();
 
   const { salesPage } = useSalesPage(editId ? Number(editId) : undefined);
 
@@ -66,7 +68,7 @@ export const useSalesPageForm = (editId?: string) => {
   // -----------------------
   // Field update helper
   // -----------------------
-  const updateField = (key: keyof FormState, value: any) => {
+  const updateField = (key: keyof FormState, value: unknown) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -141,6 +143,11 @@ export const useSalesPageForm = (editId?: string) => {
       return;
     }
 
+    if (user && typeof user.credits === "number" && user.credits < 1) {
+      toast.error("You don't have enough credits to generate a sales page.");
+      return;
+    }
+
     const toastId = toast.loading(
       editId ? "Updating sales page..." : "Generating sales page...",
     );
@@ -168,8 +175,9 @@ export const useSalesPageForm = (editId?: string) => {
           },
         });
 
+        await refreshUser();
         toast.success("Sales page updated successfully", { id: toastId });
-        router.push(`/preview/${editId}`);
+        router.push(`/preview/live-demo-${editId}`);
         mutate(() => true, undefined, { revalidate: false });
         return;
       }
@@ -179,12 +187,15 @@ export const useSalesPageForm = (editId?: string) => {
         generated_content: JSON.stringify(generated?.data),
         template: "modern",
       });
+      await refreshUser();
       toast.success("Sales page created successfully", { id: toastId });
       router.push(`/preview/live-demo-${result?.data.id}`);
       mutate(() => true, undefined, { revalidate: false });
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error("Failed to generate sales page", { id: toastId });
+      const errorObj = err as { response?: { data?: { message?: string } } };
+      const msg = errorObj?.response?.data?.message || "Failed to generate sales page";
+      toast.error(msg, { id: toastId });
     }
   };
 

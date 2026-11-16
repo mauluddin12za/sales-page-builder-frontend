@@ -4,6 +4,9 @@ export interface User {
   id: number | string;
   name: string;
   email: string;
+  avatar?: string;
+  credits?: number;
+  is_admin?: boolean;
   [key: string]: unknown;
 }
 

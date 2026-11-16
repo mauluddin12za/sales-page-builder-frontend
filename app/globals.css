@@ -269,7 +269,7 @@
   }
 
   body {
-    scroll-behavior: smooth;
+    scroll-behavior: smooth!important;
   }
 
   button {
