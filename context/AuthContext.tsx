@@ -7,15 +7,13 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { getToken, getUser } from "@/lib/api/auth";
-
-type User = any;
+import { getToken, getUser, User } from "@/lib/api/auth";
 
 type AuthContextType = {
-  user: any;
+  user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (token: string, user: any) => void;
+  login: (token: string, user: User) => void;
   logout: () => void;
   refreshAuth: () => void;
   refreshUser: () => Promise<void>;
@@ -71,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // LOGIN (call this after successful API login)
-  const login = (token: string, user: any) => {
+  const login = (token: string, user: User) => {
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(user));
 
