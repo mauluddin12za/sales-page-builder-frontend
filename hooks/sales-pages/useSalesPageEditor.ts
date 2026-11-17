@@ -1,60 +1,72 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import { regenerateSalesPage } from "@/lib/api/salesPages";
 import safeParseJSON from "@/lib/safeParseJson";
 import { useUpdateSalesPage } from "@/hooks/sales-pages";
 import { SectionKey, TemplateId } from "@/lib/mock-data";
+import type { SalesPage } from "@/lib/types/salesPage";
+import type { GeneratedContent } from "@/lib/sales-page/types";
 
-export function useSalesPageEditor(page: any, id: number) {
+export function useSalesPageEditor(
+  page: SalesPage | null | undefined,
+  id: number,
+) {
   const { trigger: updateSalesPage, isMutating: isGenerating } =
     useUpdateSalesPage();
 
-  const parsedContent = useMemo(() => {
+  const parsedContent = useMemo<GeneratedContent | null>(() => {
     if (!page) return null;
     return safeParseJSON(page.generated_content);
   }, [page]);
 
-  const [persistedTemplate, setPersistedTemplate] =
-    useState<TemplateId>("modern");
-  const [draftTemplate, setDraftTemplate] = useState<TemplateId>("modern");
+  // Track page ID to initialize or reset state when a page loads or switches
+  const [prevPageId, setPrevPageId] = useState<number | null>(page?.id ?? null);
 
-  const [persistedContent, setPersistedContent] = useState<any>(null);
-  const [draftContent, setDraftContent] = useState<any>(null);
+  const [persistedTemplate, setPersistedTemplate] = useState<TemplateId>(
+    page?.template ?? "modern",
+  );
+  const [draftTemplate, setDraftTemplate] = useState<TemplateId>(
+    page?.template ?? "modern",
+  );
 
-  const [ctaUrl, setCtaUrl] = useState("");
-  const [ctaLabel, setCtaLabel] = useState("");
+  const [persistedContent, setPersistedContent] =
+    useState<GeneratedContent | null>(parsedContent);
+  const [draftContent, setDraftContent] =
+    useState<GeneratedContent | null>(parsedContent);
+
+  const [ctaUrl, setCtaUrl] = useState(page?.cta_url ?? "");
+  const [ctaLabel, setCtaLabel] = useState(page?.cta_label ?? "");
 
   const [regenLoading, setRegenLoading] = useState<SectionKey | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
-  const hasChanges =
-    draftTemplate !== persistedTemplate ||
-    JSON.stringify(draftContent) !== JSON.stringify(persistedContent);
-
-  // INIT
-  useEffect(() => {
-    if (!page || !parsedContent) return;
-
+  // Sync state during render when a page loads asynchronously (avoids cascading renders from useEffect)
+  if (page && page.id !== prevPageId) {
+    setPrevPageId(page.id);
     setPersistedTemplate(page.template);
     setDraftTemplate(page.template);
-
     setPersistedContent(parsedContent);
     setDraftContent(parsedContent);
-
     setCtaUrl(page.cta_url ?? "");
     setCtaLabel(page.cta_label ?? "");
-  }, [page, parsedContent]);
+  }
 
-  useEffect(() => {
-    if (!draftContent) return;
-
-    setDraftContent((prev: any) => ({
-      ...prev,
+  // Derive draft content with latest CTA label and URL dynamically
+  const effectiveDraftContent = useMemo<GeneratedContent | null>(() => {
+    if (!draftContent) return null;
+    return {
+      ...draftContent,
       cta_label: ctaLabel,
       cta_url: ctaUrl,
-    }));
-  }, [ctaLabel, ctaUrl]);
+    };
+  }, [draftContent, ctaLabel, ctaUrl]);
+
+  const hasChanges =
+    draftTemplate !== persistedTemplate ||
+    JSON.stringify(draftContent) !== JSON.stringify(persistedContent) ||
+    ctaUrl !== (page?.cta_url ?? "") ||
+    ctaLabel !== (page?.cta_label ?? "");
 
   // REGENERATE
   const handleRegenerate = async (section: SectionKey) => {
@@ -71,13 +83,10 @@ export function useSalesPageEditor(page: any, id: number) {
         target_audience: page.target_audience,
         price: page.price || "",
         usp: page.usp || "",
-        current_output: draftContent,
+        current_output: effectiveDraftContent ?? {},
       });
 
-      setDraftContent((prev: any) => ({
-        ...prev,
-        ...res.data,
-      }));
+      setDraftContent((prev) => (prev ? { ...prev, ...res.data } : res.data));
 
       toast.success(`${section} updated`);
     } catch {
@@ -99,7 +108,7 @@ export function useSalesPageEditor(page: any, id: number) {
         payload: {
           ...page,
           template: draftTemplate,
-          generated_content: JSON.stringify(draftContent),
+          generated_content: JSON.stringify(effectiveDraftContent),
           cta_label: ctaLabel,
           cta_url: ctaUrl,
         },
@@ -120,7 +129,7 @@ export function useSalesPageEditor(page: any, id: number) {
     draftTemplate,
     setDraftTemplate,
 
-    draftContent,
+    draftContent: effectiveDraftContent,
     setDraftContent,
 
     persistedTemplate,

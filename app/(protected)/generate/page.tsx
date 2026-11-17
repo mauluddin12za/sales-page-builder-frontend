@@ -61,7 +61,7 @@ export default function Page() {
             {isEdit ? "Edit & regenerate" : "Generate a sales page"}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Tell us about your product. We'll handle the design.
+            Tell us about your product. We&apos;ll handle the design.
           </p>
         </div>
 

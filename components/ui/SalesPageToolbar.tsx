@@ -1,13 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ArrowLeft,
   Download,
   Eye,
   EyeOff,
+  Globe,
   Loader2,
+  MessageCircle,
   Pencil,
   RefreshCw,
   Settings2,
@@ -35,13 +36,15 @@ import { Input } from "@/components/ui/Input";
 import { Label } from "@radix-ui/react-label";
 import { Separator } from "@radix-ui/react-dropdown-menu";
 
+import { useRouter } from "next/navigation";
 import { downloadHtmlFile } from "@/lib/export-html";
 import toast from "react-hot-toast";
 import { SectionKey, TemplateId, TEMPLATES } from "@/lib/sales-page/types";
+import type { SalesPage } from "@/lib/types/salesPage";
 
 interface Props {
-  router: any;
-  page: any;
+  router: ReturnType<typeof useRouter>;
+  page: SalesPage;
 
   draftTemplate: TemplateId;
   setDraftTemplate: (v: TemplateId) => void;
@@ -61,6 +64,8 @@ interface Props {
 
   hasChanges: boolean;
 }
+
+type CtaType = "website" | "whatsapp";
 
 export function SalesPageToolbar({
   router,
@@ -83,6 +88,53 @@ export function SalesPageToolbar({
   hasChanges,
 }: Props) {
   const [navHidden, setNavHidden] = useState(false);
+
+  const [ctaType, setCtaType] = useState<CtaType>(() => {
+    return /^(?:https?:\/\/)?(?:www\.)?wa\.me/i.test(ctaUrl || "") ? "whatsapp" : "website";
+  });
+  const [prevCtaUrl, setPrevCtaUrl] = useState(ctaUrl);
+
+  // Sync type when ctaUrl loads asynchronously from database
+  if (ctaUrl !== prevCtaUrl) {
+    setPrevCtaUrl(ctaUrl);
+    if (/^(?:https?:\/\/)?(?:www\.)?wa\.me/i.test(ctaUrl || "")) {
+      setCtaType("whatsapp");
+    } else if (ctaUrl) {
+      setCtaType("website");
+    }
+  }
+
+  // Derive editable suffix directly from ctaUrl & ctaType (no cascading renders)
+  const ctaValue = useMemo(() => {
+    if (!ctaUrl) return "";
+    if (ctaType === "whatsapp") {
+      return ctaUrl.replace(/^(?:https?:\/\/)?(?:www\.)?wa\.me\/?/i, "");
+    }
+    return ctaUrl.replace(/^https?:\/\//i, "");
+  }, [ctaUrl, ctaType]);
+
+  const handleTypeChange = (newType: CtaType) => {
+    setCtaType(newType);
+    setCtaUrl("");
+  };
+
+  const handleValueChange = (raw: string) => {
+    let clean = raw.trim();
+    const prefix = ctaType === "whatsapp" ? "https://wa.me/" : "https://";
+
+    if (ctaType === "whatsapp") {
+      clean = clean.replace(/^(https?:\/\/)?(www\.)?wa\.me\/?/i, "");
+      clean = clean.replace(/^\+/, "").replace(/[\s\-()]/g, "");
+    } else {
+      clean = clean.replace(/^https?:\/\//i, "");
+    }
+
+    if (!clean) {
+      setCtaUrl("");
+    } else {
+      setCtaUrl(`${prefix}${clean}`);
+    }
+  };
 
   return (
     <>
@@ -154,27 +206,90 @@ export function SalesPageToolbar({
                   </SheetHeader>
 
                   <div className="mt-6 space-y-6">
-                    {/* CTA */}
-                    <section className="space-y-3">
-                      <h3 className="text-sm font-semibold">CTA Settings</h3>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs">URL</Label>
-                        <Input
-                          value={ctaUrl}
-                          onChange={(e) => setCtaUrl(e.target.value)}
-                          placeholder="https://example.com"
-                        />
+                    {/* CTA SETTINGS */}
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold">CTA Settings</h3>
+                        <span className="text-[11px] text-muted-foreground">Action button</span>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label className="text-xs">Label</Label>
+                      {/* Type picker */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground font-medium">Link Destination</Label>
+                        <div className="grid grid-cols-2 gap-1.5 p-1 bg-muted/60 rounded-lg border border-border">
+                          <button
+                            type="button"
+                            onClick={() => handleTypeChange("website")}
+                            className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${
+                              ctaType === "website"
+                                ? "bg-background text-foreground shadow-xs font-semibold"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <Globe className="h-3.5 w-3.5" />
+                            Website URL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTypeChange("whatsapp")}
+                            className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${
+                              ctaType === "whatsapp"
+                                ? "bg-background text-foreground shadow-xs font-semibold text-emerald-600 dark:text-emerald-400"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            WhatsApp
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Predefined URL with Muted Prefix */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground font-medium">
+                          {ctaType === "whatsapp" ? "WhatsApp Phone Number" : "Target Web Address"}
+                        </Label>
+                        <div className="flex rounded-lg border border-input bg-background shadow-xs focus-within:ring-1 focus-within:ring-ring overflow-hidden">
+                          {/* Uneditable / Muted Predefined Prefix */}
+                          <span className="inline-flex items-center px-3 bg-muted/60 text-muted-foreground text-xs font-mono select-none border-r border-input shrink-0">
+                            {ctaType === "whatsapp" ? "https://wa.me/" : "https://"}
+                          </span>
+                          {/* User input for the rest */}
+                          <input
+                            type="text"
+                            value={ctaValue}
+                            onChange={(e) => handleValueChange(e.target.value)}
+                            placeholder={
+                              ctaType === "whatsapp" ? "6281234567890" : "yourproduct.com/checkout"
+                            }
+                            className="flex-1 min-w-0 bg-transparent px-3 py-2 text-xs outline-none placeholder:text-muted-foreground/60"
+                          />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {ctaType === "whatsapp"
+                            ? "Prefix is locked. Enter phone number with country code (e.g. 6281234567890)."
+                            : "Prefix https:// is locked. Enter your domain or page path."}
+                        </p>
+                      </div>
+
+                      {/* Button Label */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground font-medium">Button Text (Label)</Label>
                         <Input
                           value={ctaLabel}
                           onChange={(e) => setCtaLabel(e.target.value)}
-                          placeholder="Get Started"
+                          placeholder={ctaType === "whatsapp" ? "Chat on WhatsApp" : "Get Started"}
+                          className="h-9 text-xs"
                         />
                       </div>
+
+                      {/* Live Full Link Preview */}
+                      {ctaUrl && (
+                        <div className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] space-y-1">
+                          <span className="text-muted-foreground font-medium block">Final Link Preview:</span>
+                          <span className="text-primary font-mono break-all block">{ctaUrl}</span>
+                        </div>
+                      )}
 
                       <Button
                         size="sm"

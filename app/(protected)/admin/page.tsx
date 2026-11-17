@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/layout/AppLayout";
@@ -14,8 +14,6 @@ import {
   PlusCircle,
   MinusCircle,
   Trash2,
-  CheckCircle2,
-  XCircle,
   TrendingDown,
 } from "lucide-react";
 import {
@@ -44,7 +42,6 @@ export default function AdminPage() {
 
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loadingData, setLoadingData] = useState(false);
 
   // Users tab state
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -86,72 +83,95 @@ export default function AdminPage() {
   }, [user, loading, router]);
 
   // Load Overview Stats
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      setLoadingData(true);
       const data = await getAdminStats();
       setStats(data);
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { message?: string } } };
       toast.error(errorObj?.response?.data?.message || "Failed to load admin stats");
-    } finally {
-      setLoadingData(false);
     }
-  };
+  }, []);
 
   // Load Users
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
-      setLoadingData(true);
       const data = await getAdminUsers({ page: usersPage, search: userSearch });
       setUsers(data.data || []);
       setUsersTotalPages(data.last_page || 1);
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { message?: string } } };
       toast.error(errorObj?.response?.data?.message || "Failed to load users");
-    } finally {
-      setLoadingData(false);
     }
-  };
+  }, [usersPage, userSearch]);
 
   // Load Sales Pages
-  const fetchSalesPages = async () => {
+  const fetchSalesPages = useCallback(async () => {
     try {
-      setLoadingData(true);
       const data = await getAdminSalesPages({ page: pagesPage, search: pageSearch });
       setSalesPages(data.data || []);
       setPagesTotalPages(data.last_page || 1);
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { message?: string } } };
       toast.error(errorObj?.response?.data?.message || "Failed to load sales pages");
-    } finally {
-      setLoadingData(false);
     }
-  };
+  }, [pagesPage, pageSearch]);
 
   // Load Transactions
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     try {
-      setLoadingData(true);
       const data = await getAdminTransactions({ page: txPage, search: txSearch });
       setTransactions(data.data || []);
       setTxTotalPages(data.last_page || 1);
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { message?: string } } };
       toast.error(errorObj?.response?.data?.message || "Failed to load transactions");
-    } finally {
-      setLoadingData(false);
     }
-  };
+  }, [txPage, txSearch]);
 
   useEffect(() => {
-    if (user?.is_admin) {
-      if (activeTab === "overview") fetchStats();
-      if (activeTab === "users") fetchUsers();
-      if (activeTab === "pages") fetchSalesPages();
-      if (activeTab === "transactions") fetchTransactions();
-    }
-  }, [user, activeTab, usersPage, pagesPage, txPage]);
+    if (!user?.is_admin) return;
+
+    let ignore = false;
+
+    const loadData = async () => {
+      try {
+        if (activeTab === "overview") {
+          const data = await getAdminStats();
+          if (!ignore) setStats(data);
+        } else if (activeTab === "users") {
+          const data = await getAdminUsers({ page: usersPage, search: userSearch });
+          if (!ignore) {
+            setUsers(data.data || []);
+            setUsersTotalPages(data.last_page || 1);
+          }
+        } else if (activeTab === "pages") {
+          const data = await getAdminSalesPages({ page: pagesPage, search: pageSearch });
+          if (!ignore) {
+            setSalesPages(data.data || []);
+            setPagesTotalPages(data.last_page || 1);
+          }
+        } else if (activeTab === "transactions") {
+          const data = await getAdminTransactions({ page: txPage, search: txSearch });
+          if (!ignore) {
+            setTransactions(data.data || []);
+            setTxTotalPages(data.last_page || 1);
+          }
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const errorObj = err as { response?: { data?: { message?: string } } };
+          toast.error(errorObj?.response?.data?.message || "Failed to load data");
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      ignore = true;
+    };
+  }, [user?.is_admin, activeTab, usersPage, userSearch, pagesPage, pageSearch, txPage, txSearch]);
 
   // Adjust Credits Handler
   const handleSaveCredits = async () => {
